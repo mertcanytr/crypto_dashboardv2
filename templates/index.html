@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Kripto Dashboard</title>
+
+<!-- Font -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+:root{
+    /* DARK MODE renkleri */
+    --bg:#1a1a1a;              --card:#2b2b2b;   --field:#3a3a3a;
+    --text:#ffffff;            --border:#555;
+
+    /* yeni canlı renkler  ( %35 opacity ) */
+    --buy : rgba(0, 220, 100, 0.45);   /* #00DC64  %45 opacity  */
+    --sell: rgba(245, 50, 50, 0.55);   /* #F53232  %55 opacity  */
+
+    /* Grafik çizgisi */
+    --chart-line:#6fb5ff;               /* açık mavi */
+
+    --primary:#0d6efd;   --primary-dark:#084298;
+}
+body.light{
+    /* LIGHT MODE renkleri */
+    --bg:#f5f6fa;        --card:#ffffff; --field:#eef0f4;
+    --text:#1a1a1a;      --border:#c5c6cc;
+
+    --buy : rgba(16, 238, 116, 0.658);    /* #00B450  %28 opacity */
+    --sell: rgba(233, 24, 24, 0.74);   /* #E13C3C  %32 opacity */
+
+    /* ışıkta daha koyu çizgi */
+    --chart-line:#0d6efd;
+}
+.buy {background:var(--buy)}
+.sell{background:var(--sell)}
+body{
+    background:var(--bg);color:var(--text);font-family:"Inter",sans-serif;
+    min-height:100vh;display:flex;justify-content:center;padding:2rem;
+    transition:background .25s,color .25s;
+}
+
+.dashboard{
+    width:100%;
+    max-width:1700px;                       /* 1️⃣ TOPLAM GENİŞLİK ARTTI */
+    display:grid;
+    grid-template-columns:                  /* 2️⃣ KOLON ÖLÇÜLERİ */
+        minmax(380px,480px)                 /* sol blok biraz daha geniş  */
+        minmax(420px,1fr)                   /* orta blok min 420, büyüyebilir */
+        minmax(380px,480px);                /* sağ blok biraz daha geniş  */
+    column-gap:3rem;
+    row-gap:2rem;
+}
+.card{
+    background:var(--card);padding:1.3rem;border-radius:1rem;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);position:relative;
+    transition:background .25s;
+}
+h2{font-size:1.6rem;font-weight:700;text-align:center;margin-bottom:1rem}
+input,select,button{
+    width:100%;padding:.55rem;margin:.25rem 0 1rem 0;border:none;border-radius:.3rem;
+    background:var(--field);color:var(--text);transition:.25s background,color;
+}
+button{background:var(--primary);color:#fff;font-weight:600;cursor:pointer}
+button:hover{background:var(--primary-dark)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:.45rem;border:1px solid var(--border);text-align:center;font-size:.85rem;transition:.25s border}
+th{background:var(--field)}
+.buy{background:var(--buy)} .sell{background:var(--sell)}
+.market-table th{text-align:left;width:55%} .market-table td{text-align:right}
+#orderbook-wrapper{max-height:70vh;overflow-y:auto}
+.spinner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+         background:rgba(0,0,0,.25);border-radius:1rem}
+.spinner:after{content:"";width:36px;height:36px;border:4px solid var(--text);
+               border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1100px){.dashboard{grid-template-columns:1fr;column-gap:0}}
+/* Tema switch */
+#mode-switch{position:absolute;top:1.2rem;right:1.2rem;display:flex;align-items:center;
+             gap:.4rem;font-size:.85rem;font-weight:600;user-select:none}
+#mode-switch input{width:42px;height:22px;appearance:none;background:var(--border);
+                   border-radius:11px;position:relative;cursor:pointer;transition:.3s}
+#mode-switch input:before{content:"";position:absolute;width:18px;height:18px;background:#fff;
+                          border-radius:50%;top:2px;left:2px;transition:.3s}
+#mode-switch input:checked{background:var(--primary)}
+#mode-switch input:checked:before{transform:translateX(20px)}
+</style>
+</head>
+
+<body>
+<!-- Dark / Light anahtarı -->
+<div id="mode-switch">
+    <span>🌙</span>
+    <input type="checkbox" id="switch">
+    <span>☀️</span>
+</div>
+
+<div class="dashboard">
+
+    <!-- SOL -->
+    <div class="card">
+        <h2>WAVG Hesaplama</h2>
+        <form id="wavg-form">
+            <label>Sembol</label>
+            <input type="text" id="symbol" value="BTCUSDT" required>
+            <label>Miktar</label>
+            <input type="number" id="quantity" value="1" step="any" required>
+            <label>İşlem</label>
+            <select id="side"><option value="BUY">Al</option><option value="SELL">Sat</option></select>
+            <button type="submit">Hesapla</button>
+        </form>
+        <h2 id="avg-price" style="margin-top:.5rem"></h2>
+        <p id="timestamp" style="text-align:center;font-size:.85rem;opacity:.6"></p>
+        <div class="spinner" id="form-spin"></div>
+    </div>
+
+    <!-- ORTA -->
+    <div class="card">
+        <h2>Kademeler</h2>
+        <div id="orderbook-wrapper">
+            <table id="orderbook-table">
+                <thead><tr><th>Fiyat</th><th>Miktar</th><th>Lot</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SAĞ -->
+    <div class="card">
+        <h2>Piyasa Verileri (5 dk)</h2>
+        <table class="market-table">
+            <tbody>
+                <tr><th>Open Interest</th>   <td id="open-interest">–</td></tr>
+                <tr><th>Long/Short Ratio</th><td id="long-short-ratio">–</td></tr>
+                <tr><th>Funding Rate</th>    <td id="funding-rate">–</td></tr>
+                <tr><th>Güncelleme</th>      <td id="md-timestamp">–</td></tr>
+            </tbody>
+        </table>
+        <canvas id="ratio-chart" style="margin-top:1.2rem;height:220px"></canvas>
+        <div class="spinner" id="market-spin"></div>
+    </div>
+
+</div>
+
+<script>
+const elOI   = document.getElementById('open-interest');
+const elLSR  = document.getElementById('long-short-ratio');
+const elFR   = document.getElementById('funding-rate');
+const elTime = document.getElementById('md-timestamp');
+    
+/* ---------- Tema anahtarı ---------- */
+const switchEl = document.getElementById("switch");
+switchEl.addEventListener("change",()=>{
+    document.body.classList.toggle("light", switchEl.checked);
+    updateChartTheme();                 //  ← yeni
+});
+/* Tarayıcı varsayılanı */
+if(matchMedia("(prefers-color-scheme:light)").matches){
+    switchEl.checked=true;
+    document.body.classList.add("light");
+    updateChartTheme();                 //  ← yeni
+}
+
+
+/* ---------- Sabitler ---------- */
+const MAX_ROWS = 10;
+let currentSymbol = null;
+const spin = (id, on) => (document.getElementById(id).style.display = on ? "flex" : "none");
+
+const css = (v)=> getComputedStyle(document.body).getPropertyValue(v).trim();
+
+function updateChartTheme(){
+    const line = css('--chart-line');
+    ratioChart.data.datasets[0].borderColor     = line;
+    ratioChart.data.datasets[0].backgroundColor = line.replace('rgb','rgba').replace(')',',0.15)');
+    ratioChart.update();
+}
+/* ---------- Chart ---------- */
+
+const ratioData = {
+    labels:[],
+    datasets:[{
+        label:'Long/Short',
+        data:[],
+        borderColor: css('--chart-line'),                         // ilk renk
+        backgroundColor: css('--chart-line').replace('rgb','rgba').replace(')',',0.15)'),
+        tension:.3
+    }]
+};
+
+const ctx = document.getElementById('ratio-chart');
+const ratioChart = new Chart(ctx,{
+    type:'line',
+    data:ratioData,
+    options:{scales:{x:{display:false},y:{beginAtZero:false}},plugins:{legend:{display:false}}}
+});
+async function loadRatioHistory(sym){
+    const url=`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${sym}&period=5m&limit=60`;
+    const r = await fetch(url); const arr = await r.json();
+
+    ratioData.labels=[]; ratioData.datasets[0].data=[];      // temizle
+    arr.forEach(p=>{
+        ratioData.labels.push(new Date(p.timestamp).toLocaleTimeString());
+        ratioData.datasets[0].data.push(parseFloat(p.longShortRatio));
+    });
+    ratioChart.update();
+}
+
+/* ---------- Market Data ---------- */
+async function fetchMarketData(sym){
+    try{
+        spin("market-spin",true);
+        const res=await fetch(`/api/market-data/?symbol=${sym}`);
+        const d  =await res.json();
+        spin("market-spin",false);
+        if(d.error) throw d.error;
+
+        if(ratioData.labels.length===0){          // ilk kez
+            await loadRatioHistory(sym);
+        }
+
+        /* tablo hücrelerini güncelle  … */
+        elOI.textContent   = d.open_interest.toLocaleString();
+        elLSR.textContent  = d.long_short_ratio.toFixed(4);
+        elFR.textContent   = (d.funding_rate*100).toFixed(4)+' %';
+        elTime.textContent = new Date(d.timestamp).toLocaleTimeString();
+
+        /* son noktayı ekle */
+        const now = new Date().toLocaleTimeString();
+        ratioData.labels.push(now);
+        ratioData.datasets[0].data.push(d.long_short_ratio);
+
+        while(ratioData.labels.length>60){
+            ratioData.labels.shift();
+            ratioData.datasets[0].data.shift();
+        }
+        ratioChart.update();
+    }catch(e){
+        spin("market-spin",false);console.error(e);
+    }
+}
+
+switchEl.addEventListener("change",()=>{
+    document.body.classList.toggle("light", switchEl.checked);
+    updateChartTheme();                       // çizgi rengini güncelle
+});
+if(matchMedia("(prefers-color-scheme:light)").matches){
+    switchEl.checked=true; document.body.classList.add("light");
+    updateChartTheme();
+}
+
+/* ---------- WAVG ---------- */
+document.getElementById("wavg-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const symbol = document.getElementById("symbol").value.toUpperCase();
+    const qty = document.getElementById("quantity").value;
+    const side = document.getElementById("side").value;
+
+    spin("form-spin", true);
+    const res = await fetch("/api/wavg/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, qty, side })
+    });
+    const data = await res.json();
+    spin("form-spin", false);
+
+    if (data.error) { alert(data.error); return; }
+
+    document.getElementById("avg-price").innerText = "Ortalama: " + data.average_price;
+    document.getElementById("timestamp").innerText = "Veri: " + data.timestamp;
+
+    /* kademeler tablosu */
+    const tb = document.querySelector("#orderbook-table tbody");
+    tb.innerHTML = "";
+    let cum = 0;
+    data.kademeler.slice(0, MAX_ROWS).forEach(k => {
+        cum += k.lot;
+        tb.innerHTML += `<tr class="${side === "BUY" ? "buy" : "sell"}">
+            <td>${k.price.toFixed(2)}</td>
+            <td>${k.lot.toFixed(6)}</td>
+            <td>${cum.toFixed(6)}</td>
+        </tr>`;
+    });
+
+    currentSymbol = symbol;
+    fetchMarketData(symbol);
+});
+
+/* periyodik güncelleme */
+setInterval(() => { if (currentSymbol) fetchMarketData(currentSymbol); }, 30000);
+</script>
+</body>
+</html>
