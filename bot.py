@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Telegram Bot API token'ınızı buraya girin
-TELEGRAM_BOT_TOKEN = "8205583521:AAF5UHSXFAHchWZnXThg9Xc2EMHWDzFv3Eo"
+TELEGRAM_BOT_TOKEN = "API_KEY"
 
 # Django uygulamanızın çalıştığı URL
 # Eğer localde çalışıyorsa http://127.0.0.1:8000/
