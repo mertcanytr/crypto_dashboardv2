@@ -38,6 +38,7 @@ Adımlar
 Depoyu klonlayın:
 
 git clone https://github.com/mertcanytr/crypto_dashboardv2.git
+
 cd crypto_dashboardv2
 
 
@@ -64,3 +65,4 @@ docker run -p 8000:8000 crypto_dashboard
 
 Uygulama, http://localhost:8000
  adresinde çalışacaktır.
+
